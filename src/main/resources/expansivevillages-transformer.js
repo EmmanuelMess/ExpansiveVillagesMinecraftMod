@@ -75,6 +75,19 @@ function initializeCoreMod() {
                 injectCreateVillagerBabyEventFire(instructions);
                 return methodNode;
             }
+        },
+        "VillageStructure.Stack#init": {
+            "target": {
+                "type": "METHOD",
+                "class": "net.minecraft.world.gen.feature.structure.VillageStructure$Start",
+                "methodName": "func_214625_a",
+                "methodDesc": "(Lnet/minecraft/world/gen/ChunkGenerator;Lnet/minecraft/world/gen/feature/template/TemplateManager;IILnet/minecraft/world/biome/Biome;)V"
+            },
+            "transformer": function(methodNode) {
+                var instructions = methodNode.instructions;
+                injectFireVillageStructureStartEvent(instructions);
+                return methodNode;
+            }
         }
     }));
 }
@@ -164,7 +177,110 @@ function injectCreateVillagerBabyEventFire(instructions) {
     instructions.insert(penultimateLabel, toInject);
 }
 
+/*
+public init(Lnet/minecraft/world/gen/ChunkGenerator;Lnet/minecraft/world/gen/feature/template/TemplateManager;IILnet/minecraft/world/biome/Biome;)V
+  L0
+    LINENUMBER 61 L0
+    ALOAD 1
+    ALOAD 5
+    GETSTATIC net/minecraft/world/gen/feature/Feature.VILLAGE : Lnet/minecraft/world/gen/feature/structure/Structure;
+    INVOKEVIRTUAL net/minecraft/world/gen/ChunkGenerator.getStructureConfig (Lnet/minecraft/world/biome/Biome;Lnet/minecraft/world/gen/feature/structure/Structure;)Lnet/minecraft/world/gen/feature/IFeatureConfig;
+    CHECKCAST net/minecraft/world/gen/feature/structure/VillageConfig
+    ASTORE 6
+   L1
+    LINENUMBER 62 L1
+    NEW net/minecraft/util/math/BlockPos
+    DUP
+    ILOAD 3
+    BIPUSH 16
+    IMUL
+    ICONST_0
+    ILOAD 4
+    BIPUSH 16
+    IMUL
+    INVOKESPECIAL net/minecraft/util/math/BlockPos.<init> (III)V
+    ASTORE 7
+   L2
+    LINENUMBER 63 L2
+    ALOAD 1
+    ALOAD 2
+    ALOAD 7
+    ALOAD 0
+    GETFIELD net/minecraft/world/gen/feature/structure/VillageStructure$Start.components : Ljava/util/List;
+    ALOAD 0
+    GETFIELD net/minecraft/world/gen/feature/structure/VillageStructure$Start.rand : Lnet/minecraft/util/SharedSeedRandom;
+    ALOAD 6
+    INVOKESTATIC net/minecraft/world/gen/feature/structure/VillagePieces.func_214838_a (Lnet/minecraft/world/gen/ChunkGenerator;Lnet/minecraft/world/gen/feature/template/TemplateManager;Lnet/minecraft/util/math/BlockPos;Ljava/util/List;Lnet/minecraft/util/SharedSeedRandom;Lnet/minecraft/world/gen/feature/structure/VillageConfig;)V
+   L3
+    LINENUMBER 64 L3
+    ALOAD 0
+    INVOKEVIRTUAL net/minecraft/world/gen/feature/structure/VillageStructure$Start.recalculateStructureSize ()V
+   L4
+    ALOAD 0
+    INVOKESTATIC ar/com/messupetru/expansivevillages/VillageManager.fireVillageStructureStartEvent (Lnet/minecraft/world/gen/feature/structure/VillageStructure$Start;)V
+   L5
+    LINENUMBER 65 L4
+    RETURN
+   L6
+    LOCALVARIABLE this Lnet/minecraft/world/gen/feature/structure/VillageStructure$Start; L0 L5 0
+    LOCALVARIABLE generator Lnet/minecraft/world/gen/ChunkGenerator; L0 L5 1
+    // signature Lnet/minecraft/world/gen/ChunkGenerator<*>;
+    // declaration: generator extends net.minecraft.world.gen.ChunkGenerator<?>
+    LOCALVARIABLE templateManagerIn Lnet/minecraft/world/gen/feature/template/TemplateManager; L0 L5 2
+    LOCALVARIABLE chunkX I L0 L5 3
+    LOCALVARIABLE chunkZ I L0 L5 4
+    LOCALVARIABLE biomeIn Lnet/minecraft/world/biome/Biome; L0 L5 5
+    LOCALVARIABLE villageconfig Lnet/minecraft/world/gen/feature/structure/VillageConfig; L1 L5 6
+    LOCALVARIABLE blockpos Lnet/minecraft/util/math/BlockPos; L2 L5 7
+    MAXSTACK = 6
+    MAXLOCALS = 8
+ */
+function injectFireVillageStructureStartEvent(instructions) {
+    var penultimateLabel;
+    var arrayLength = instructions.size();
+    var lastIsPassed = false;
 
+    for (var i = arrayLength-1; i >= 0; --i) {
+        var instruction = instructions.get(i);
+        if (instruction.getType() == LABEL) {
+            if(!lastIsPassed) {
+                lastIsPassed = true;
+            } else {
+                penultimateLabel = instruction;
+                print("Found injection point \"penultimate Label\" " + instruction);
+                break;
+            }
+        }
+    }
+    if (!penultimateLabel)
+        throw "Error: Couldn't find injection point \"penultimate Label\"!";
+
+    var toInject = new InsnList();
+
+    // Labels n stuff
+    var originalInstructionsLabel = new LabelNode();
+
+    toInject.add(new VarInsnNode(ALOAD, 0));
+
+    // Make list of instructions to inject
+    toInject.add(new MethodInsnNode(
+        //int opcode
+        INVOKESTATIC,
+        //String owner
+        "ar/com/messupetru/expansivevillages/VillageManager",
+        //String name
+        "fireVillageStructureStartEvent",
+        //String descriptor
+        "(Lnet/minecraft/world/gen/feature/structure/VillageStructure$Start;)V",
+        //boolean isInterface
+        false
+    ));
+
+    toInject.add(originalInstructionsLabel);
+
+    // Inject instructions
+    instructions.insert(penultimateLabel, toInject);
+}
 
 
 

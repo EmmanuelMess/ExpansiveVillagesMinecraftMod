@@ -1,4 +1,4 @@
-package ar.com.messupetru.expansivevillages;
+package ar.com.messupetru.expansivevillages.events;
 
 import net.minecraft.entity.merchant.villager.VillagerEntity;
 import net.minecraft.world.IWorld;

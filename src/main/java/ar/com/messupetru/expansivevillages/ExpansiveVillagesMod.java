@@ -1,26 +1,21 @@
 package ar.com.messupetru.expansivevillages;
 
-import com.google.common.collect.ImmutableMap;
-import net.minecraft.block.BedBlock;
-import net.minecraft.block.BlockState;
+import ar.com.messupetru.expansivevillages.events.CreateBabyVillagerEvent;
+import ar.com.messupetru.expansivevillages.events.VillageStructureStartEvent;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.merchant.villager.VillagerEntity;
 import net.minecraft.pathfinding.Path;
-import net.minecraft.state.IProperty;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.village.PointOfInterest;
 import net.minecraft.village.PointOfInterestManager;
 import net.minecraft.village.PointOfInterestType;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -88,6 +83,11 @@ public class ExpansiveVillagesMod {
                     houseCreatorManager.reset();
                 }
             });
+        }
+
+        @SubscribeEvent
+        public static void onVillageGenerated(VillageStructureStartEvent structureStartEvent) {
+            LOGGER.debug("New village!");
         }
 
         private static boolean pathfindToBed(VillagerEntity villager, BlockPos blockPos) {
