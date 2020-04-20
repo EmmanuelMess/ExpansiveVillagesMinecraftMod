@@ -2,6 +2,8 @@ package ar.com.messupetru.expansivevillages;
 
 import net.minecraft.world.gen.feature.structure.VillageStructure;
 
+import java.util.Objects;
+
 public class VillageHousing {
     public final VillageStructure.Start start;
     private int beds;
@@ -25,5 +27,20 @@ public class VillageHousing {
 
     public void setVillagers(int villagers) {
         this.villagers = villagers;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        VillageHousing that = (VillageHousing) o;
+        return beds == that.beds &&
+                villagers == that.villagers &&
+                start.equals(that.start);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(start, beds, villagers);
     }
 }
