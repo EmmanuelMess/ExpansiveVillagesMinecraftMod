@@ -42,12 +42,20 @@ public class ExpansiveVillagesMod {
         private int spawnProbability = 0;
         private HashSet<VillageHousing> villages = new HashSet<>();
         private HashSet<VillageHousing> dirtyVillages = new HashSet<>();
-        
+        private int counter = 0;
+
         public HouseCreatorManager() {
 
         }
 
         public void worldTick(World world) {
+            if(counter < 20) {
+                counter++;
+                return;
+            } else {
+                counter = 0;
+            }
+
             processDirty(world);
 
             villages.removeIf((villageHousing) -> {
@@ -93,17 +101,19 @@ public class ExpansiveVillagesMod {
         }
 
         private void processDirty(World world) {
-            dirtyVillages.forEach(villageHousing -> {
-                MutableBoundingBox boundingBox = villageHousing.start.getBoundingBox();
+            dirtyVillages.forEach(village -> {
+                MutableBoundingBox boundingBox = village.start.getBoundingBox();
 
                 long amountBeds = BlockPos.getAllInBox(boundingBox)
                         .filter((blockPos) -> world.getBlockState(blockPos).getBlock() instanceof BedBlock)
                         .count();
-                villageHousing.setBeds((int) amountBeds);
+                village.setBeds((int) amountBeds);
 
                 long amountOfVillagers = world.getEntitiesWithinAABB(EntityType.VILLAGER, AxisAlignedBB.toImmutable(boundingBox), x -> true)
                         .size();
-                villageHousing.setVillagers((int) amountOfVillagers);
+                village.setVillagers((int) amountOfVillagers);
+
+                villages.add(village);
             });
             dirtyVillages.clear();
         }
