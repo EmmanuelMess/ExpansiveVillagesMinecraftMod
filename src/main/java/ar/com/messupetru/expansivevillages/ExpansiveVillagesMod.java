@@ -2,13 +2,19 @@ package ar.com.messupetru.expansivevillages;
 
 import ar.com.messupetru.expansivevillages.events.CreateBabyVillagerEvent;
 import ar.com.messupetru.expansivevillages.events.VillageStructureStartEvent;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.EntityType;
 import net.minecraft.entity.merchant.villager.VillagerEntity;
 import net.minecraft.pathfinding.Path;
+import net.minecraft.state.properties.BedPart;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MutableBoundingBox;
 import net.minecraft.village.PointOfInterest;
 import net.minecraft.village.PointOfInterestManager;
 import net.minecraft.village.PointOfInterestType;
+import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -16,8 +22,8 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.HashSet;
+import java.util.Random;
 import java.util.stream.Stream;
 
 // The value here should match an entry in the META-INF/mods.toml file
@@ -25,7 +31,7 @@ import java.util.stream.Stream;
 public class ExpansiveVillagesMod {
     public static final String MOD_ID = "expansivevillages";
 
-    public static final HashMap<UUID, HouseCreatorManager> HOUSE_CREATOR_MANAGER = new HashMap<>();
+    public static final HouseCreatorManager HOUSE_CREATOR_MANAGER = new HouseCreatorManager();
 
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -34,20 +40,72 @@ public class ExpansiveVillagesMod {
     }
 
     public static class HouseCreatorManager {
-        private static final int MAX_SPAWN_PROBABILITY = 80;
+        private static final int ALL_VILLAGERS_HAVE_BEDS_PROBABILITY = 20;
+        private static final int BEDS_ARE_MISSING = 80;
+
+        private final Random rand = new Random();
         private int spawnProbability = 0;
-        public final VillagerEntity originVillager;
+        private HashSet<VillageHousing> housings = new HashSet<>();
+        private HashSet<VillageHousing> notCached = new HashSet<>();
 
-        public HouseCreatorManager(VillagerEntity originVillager) {
-            this.originVillager = originVillager;
+        public HouseCreatorManager() {
+
         }
 
-        public void setAmountOfBeds(long amountFromChild) {
-            spawnProbability = (int) (MAX_SPAWN_PROBABILITY - amountFromChild * 10);
+        public void worldTick(World world) {
+            addToCache(world);
+
+            housings.removeIf((villageHousing) -> {
+                if(villageHousing.getVillagers() <= 1) {
+                    LOGGER.info("Village is dead! Villagers: " villageHousing.getVillagers());
+                    //return true;
+                    return false;
+                }
+
+                float ratio = villageHousing.getBeds()/(float)villageHousing.getVillagers();
+
+                if(ratio >= 1.5) spawnProbability = 0;
+                else if(ratio >= 1.0) spawnProbability = ALL_VILLAGERS_HAVE_BEDS_PROBABILITY;
+                else spawnProbability = BEDS_ARE_MISSING;
+
+                LOGGER.info("Tick, Probability is " + spawnProbability);
+
+                if(rand.nextInt(100) <= spawnProbability) {
+                    BlockPos block1 = new BlockPos(0, 3, 0);
+                    BlockPos block2 = new BlockPos(0, 3, 1);
+                    BlockPos block3 = new BlockPos(0, 4, 0);
+                    BlockPos block4 = new BlockPos(0, 4, 1);
+                    world.setBlockState(block1, Blocks.STONE.getDefaultState());
+                    world.setBlockState(block2, Blocks.STONE.getDefaultState());
+                    world.setBlockState(block3, Blocks.RED_BED.getDefaultState().with(BedBlock.PART, BedPart.HEAD));
+                    world.setBlockState(block4, Blocks.RED_BED.getDefaultState());
+                    LOGGER.info("Creating home!");
+                    LOGGER.info(Blocks.RED_BED.getDefaultState().toString());
+                }
+
+                return false;
+            });
         }
 
-        public void reset() {
-            spawnProbability = 0;
+        private void addToCache(World world) {
+            notCached.forEach(villageHousing -> {
+                MutableBoundingBox boundingBox = villageHousing.start.getBoundingBox();
+
+                long amountBeds = BlockPos.getAllInBox(boundingBox)
+                        .filter((blockPos) -> world.getBlockState(blockPos).getBlock() instanceof BedBlock)
+                        .count();
+                villageHousing.setBeds((int) amountBeds);
+
+                long amountOfVillagers = world.getEntitiesWithinAABB(EntityType.VILLAGER, AxisAlignedBB.toImmutable(boundingBox), x -> true)
+                        .size();
+                villageHousing.setVillagers((int) amountOfVillagers);
+            });
+            notCached.clear();
+        }
+
+        public void addVillage(VillageHousing village) {
+            housings.add(village);
+            notCached.add(village);
         }
     }
 
@@ -55,6 +113,7 @@ public class ExpansiveVillagesMod {
     public static class RegistryEvents {
         @SubscribeEvent
         public static void onNewbornVillager(final CreateBabyVillagerEvent event) {
+            /*
             VillagerEntity child = event.child;
 
             java.util.function.Predicate<PointOfInterestType> type = PointOfInterestType.HOME.func_221045_c();
@@ -68,26 +127,21 @@ public class ExpansiveVillagesMod {
             HOUSE_CREATOR_MANAGER.get(child.getUniqueID()).setAmountOfBeds(pointOfInterestStream.count());
 
             LOGGER.info("Newborn " + child.getPosition().toString() + ": ");
+            */
         }
 
         @SubscribeEvent
         public static void onWorldTick(TickEvent.WorldTickEvent tickEvent) {
-            HOUSE_CREATOR_MANAGER.forEach((uuid, houseCreatorManager) -> {
-                LOGGER.info("Tick, Probability is " + houseCreatorManager.spawnProbability + " at " + uuid);
-
-                if(houseCreatorManager.originVillager.getRNG().nextInt(100) <= houseCreatorManager.spawnProbability) {
-                    BlockPos home = houseCreatorManager.originVillager.getHomePosition();
-                    BlockPos newHome = home.add( 50, 0, 50);
-                    tickEvent.world.setBlockState(newHome, Blocks.RED_BED.getDefaultState());
-                    LOGGER.info("Creating home!");
-                    houseCreatorManager.reset();
-                }
-            });
+            HOUSE_CREATOR_MANAGER.worldTick(tickEvent.world);
         }
 
         @SubscribeEvent
         public static void onVillageGenerated(VillageStructureStartEvent structureStartEvent) {
             LOGGER.debug("New village!");
+            MutableBoundingBox components = structureStartEvent.start.getBoundingBox();
+            LOGGER.debug("Structure: " + components);
+
+            HOUSE_CREATOR_MANAGER.addVillage(new VillageHousing(structureStartEvent.start));
         }
 
         private static boolean pathfindToBed(VillagerEntity villager, BlockPos blockPos) {
