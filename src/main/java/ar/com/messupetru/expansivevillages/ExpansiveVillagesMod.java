@@ -3,10 +3,16 @@ package ar.com.messupetru.expansivevillages;
 import ar.com.messupetru.expansivevillages.events.CreateBabyVillagerEvent;
 import ar.com.messupetru.expansivevillages.events.VillageStructureStartEvent;
 import net.minecraft.block.BedBlock;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.StructureBlock;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.merchant.villager.VillagerEntity;
+import net.minecraft.network.play.client.CUpdateStructureBlockPacket;
 import net.minecraft.state.properties.BedPart;
+import net.minecraft.state.properties.StructureMode;
+import net.minecraft.tileentity.StructureBlockTileEntity;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MutableBoundingBox;
@@ -18,8 +24,10 @@ import net.minecraftforge.fml.common.Mod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 
 // The value here should match an entry in the META-INF/mods.toml file
 @Mod(ExpansiveVillagesMod.MOD_ID)
@@ -40,8 +48,8 @@ public class ExpansiveVillagesMod {
 
         private final Random rand = new Random();
         private int spawnProbability = 0;
-        private HashSet<VillageHousing> villages = new HashSet<>();
-        private HashSet<VillageHousing> dirtyVillages = new HashSet<>();
+        private Set<VillageHousing> villages = Collections.synchronizedSet(new HashSet<>());
+        private Set<VillageHousing> dirtyVillages = Collections.synchronizedSet(new HashSet<>());
         private int counter = 0;
 
         public HouseCreatorManager() {
@@ -78,25 +86,22 @@ public class ExpansiveVillagesMod {
                     int x = rand.ints(1, box.minX, box.maxX).sum();
                     int z = rand.ints(1, box.minZ, box.maxZ).sum();
                     BlockPos center = new BlockPos(x, 4, z);
+                    world.setBlockState(center, Blocks.STRUCTURE_BLOCK.getDefaultState()
+                            .with(StructureBlock.MODE, StructureMode.LOAD));
 
-                    BlockPos block1 = new BlockPos(center);
-                    BlockPos block2 = new BlockPos(center.add(0, 0, 1));
-                    BlockPos block3 = new BlockPos(center.add(0, 1, 0));
-                    BlockPos block4 = new BlockPos(center.add(0, 1, 1));
-                    world.setBlockState(block1, Blocks.STONE.getDefaultState());
-                    world.setBlockState(block2, Blocks.STONE.getDefaultState());
-                    world.setBlockState(block3, Blocks.RED_BED.getDefaultState().with(BedBlock.PART, BedPart.HEAD));
-                    world.setBlockState(block4, Blocks.RED_BED.getDefaultState());
+                    StructureBlockTileEntity entity  = (StructureBlockTileEntity) world.getTileEntity(center);
+                    entity.setMode(StructureMode.LOAD);
+                    entity.setName("village/plains/houses/plains_medium_house_1");
+                    entity.setPosition(new BlockPos(5, 0, 5));
+                    entity.load();
 
-                    ratio = villageHousing.getBeds()/(float)villageHousing.getVillagers();
+                    ratio = villageHousing.getBeds() / (float) villageHousing.getVillagers();
 
                     LOGGER.info("Creating home! New bed/villager: " + ratio + " Location: " + center);
-
-                    dirtyVillages.add(villageHousing);
-                    return true;
                 }
 
-                return false;
+                dirtyVillages.add(villageHousing);
+                return true;
             });
         }
 
