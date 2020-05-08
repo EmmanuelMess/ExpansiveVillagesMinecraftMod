@@ -7,6 +7,7 @@ import java.util.Objects;
 public class VillageHousing {
     public final VillageStructure.Start start;
     private int beds;
+    private int foods;
     private int villagers;
 
     public VillageHousing(VillageStructure.Start start) {
@@ -19,6 +20,14 @@ public class VillageHousing {
 
     public void setBeds(int beds) {
         this.beds = beds;
+    }
+
+    public int getFoods() {
+        return foods;
+    }
+
+    public void setFoods(int foods) {
+        this.foods = foods;
     }
 
     public int getVillagers() {
@@ -35,6 +44,7 @@ public class VillageHousing {
         if (o == null || getClass() != o.getClass()) return false;
         VillageHousing that = (VillageHousing) o;
         return beds == that.beds &&
+                foods == that.foods &&
                 villagers == that.villagers &&
                 start.equals(that.start);
     }

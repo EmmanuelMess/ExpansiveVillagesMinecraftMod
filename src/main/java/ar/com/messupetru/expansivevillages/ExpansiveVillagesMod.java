@@ -2,10 +2,7 @@ package ar.com.messupetru.expansivevillages;
 
 import ar.com.messupetru.expansivevillages.events.CreateBabyVillagerEvent;
 import ar.com.messupetru.expansivevillages.events.VillageStructureStartEvent;
-import net.minecraft.block.BedBlock;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.StructureBlock;
+import net.minecraft.block.*;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.merchant.villager.VillagerEntity;
 import net.minecraft.network.play.client.CUpdateStructureBlockPacket;
@@ -17,6 +14,7 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MutableBoundingBox;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.storage.ChunkLoader;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -48,8 +46,8 @@ public class ExpansiveVillagesMod {
 
         private final Random rand = new Random();
         private int spawnProbability = 0;
-        private Set<VillageHousing> villages = Collections.synchronizedSet(new HashSet<>());
-        private Set<VillageHousing> dirtyVillages = Collections.synchronizedSet(new HashSet<>());
+        private final Set<VillageHousing> villages = Collections.synchronizedSet(new HashSet<>());
+        private final Set<VillageHousing> dirtyVillages = Collections.synchronizedSet(new HashSet<>());
         private int counter = 0;
 
         public HouseCreatorManager() {
@@ -59,12 +57,13 @@ public class ExpansiveVillagesMod {
         public void worldTick(World world) {
             if(counter < 20) {
                 counter++;
+                processDirty(world);
                 return;
             } else {
                 counter = 0;
             }
 
-            processDirty(world);
+            //TODO once a day
 
             villages.removeIf((villageHousing) -> {
                 if(villageHousing.getVillagers() <= 1) {
@@ -73,54 +72,84 @@ public class ExpansiveVillagesMod {
                     return true;
                 }
 
-                float ratio = villageHousing.getBeds()/(float)villageHousing.getVillagers();
+                //TODO float foodRatio = villageHousing.getFoods()/(float)villageHousing.getVillagers();
 
-                if(ratio >= 1.5) spawnProbability = 0;
-                else if(ratio >= 1.0) spawnProbability = ALL_VILLAGERS_HAVE_BEDS_PROBABILITY;
+                float bedRatio = villageHousing.getBeds()/(float)villageHousing.getVillagers();
+
+                if(bedRatio >= 2) spawnProbability = 0;
+                else if(bedRatio >= 1.0) spawnProbability = ALL_VILLAGERS_HAVE_BEDS_PROBABILITY;
                 else spawnProbability = BEDS_ARE_MISSING_PROBABILITY;
 
-                LOGGER.info("Tick for " + villageHousing.start.getPos() + ", ratio is " + ratio);
+                LOGGER.info("Tick for " + villageHousing.start.getPos() + ", ratio is " + bedRatio);
 
                 if(rand.nextInt(100) < spawnProbability) {
                     MutableBoundingBox box = villageHousing.start.getBoundingBox();
                     int x = rand.ints(1, box.minX, box.maxX).sum();
                     int z = rand.ints(1, box.minZ, box.maxZ).sum();
                     BlockPos center = new BlockPos(x, 4, z);
-                    world.setBlockState(center, Blocks.STRUCTURE_BLOCK.getDefaultState()
-                            .with(StructureBlock.MODE, StructureMode.LOAD));
+                    BlockPos buildingPos = new BlockPos(5, 0, 5);
 
-                    StructureBlockTileEntity entity  = (StructureBlockTileEntity) world.getTileEntity(center);
-                    entity.setMode(StructureMode.LOAD);
-                    entity.setName("village/plains/houses/plains_medium_house_1");
-                    entity.setPosition(new BlockPos(5, 0, 5));
-                    entity.load();
+                    if(world.getChunkProvider().isChunkLoaded(world.getChunkAt(center).getPos()) &&
+                            world.getChunkProvider().isChunkLoaded(world.getChunkAt(buildingPos).getPos())) {
+                        BlockState oldState = world.getBlockState(center);
 
-                    ratio = villageHousing.getBeds() / (float) villageHousing.getVillagers();
+                        world.setBlockState(center, Blocks.STRUCTURE_BLOCK.getDefaultState()
+                                .with(StructureBlock.MODE, StructureMode.LOAD));
 
-                    LOGGER.info("Creating home! New bed/villager: " + ratio + " Location: " + center);
+                        StructureBlockTileEntity entity = (StructureBlockTileEntity) world.getTileEntity(center);
+                        entity.setMode(StructureMode.LOAD);
+                        entity.setName("village/plains/houses/plains_medium_house_1");
+                        entity.setPosition(buildingPos);
+                        boolean success = entity.load(false);
+
+                        world.setBlockState(center, oldState);
+
+                        if(success) {
+                            bedRatio = villageHousing.getBeds() / (float) villageHousing.getVillagers();
+
+                            LOGGER.info("Creating home! New bed/villager: " + bedRatio + " Location: " + buildingPos);
+
+                            dirtyVillages.add(villageHousing);
+                            return true;
+                        } else {
+                            LOGGER.info("Failed creating home!");
+                            return false;
+                        }
+                    }
                 }
 
-                dirtyVillages.add(villageHousing);
-                return true;
+                return false;
             });
         }
 
         private void processDirty(World world) {
-            dirtyVillages.forEach(village -> {
-                MutableBoundingBox boundingBox = village.start.getBoundingBox();
+            if (dirtyVillages.isEmpty()) {
+                return;
+            }
 
-                long amountBeds = BlockPos.getAllInBox(boundingBox)
-                        .filter((blockPos) -> world.getBlockState(blockPos).getBlock() instanceof BedBlock)
-                        .count();
-                village.setBeds((int) amountBeds);
+            VillageHousing villageHousing = dirtyVillages.iterator().next();
 
-                long amountOfVillagers = world.getEntitiesWithinAABB(EntityType.VILLAGER, AxisAlignedBB.toImmutable(boundingBox), x -> true)
-                        .size();
-                village.setVillagers((int) amountOfVillagers);
+            MutableBoundingBox boundingBox = villageHousing.start.getBoundingBox();
 
-                villages.add(village);
-            });
-            dirtyVillages.clear();
+            long amountBeds = BlockPos.getAllInBox(boundingBox)
+                    .filter((blockPos) -> world.getBlockState(blockPos).getBlock() instanceof BedBlock)
+                    .count();
+            villageHousing.setBeds((int) amountBeds);
+
+            long amountFood = BlockPos.getAllInBox(boundingBox)
+                    .filter((blockPos) -> world.getBlockState(blockPos).getBlock() instanceof CropsBlock)
+                    .count();
+            villageHousing.setFoods((int) amountFood);
+
+            long amountOfVillagers = world.getEntitiesWithinAABB(
+                    EntityType.VILLAGER,
+                    AxisAlignedBB.toImmutable(boundingBox),
+                    x -> true)
+                    .size();
+            villageHousing.setVillagers((int) amountOfVillagers);
+
+            dirtyVillages.remove(villageHousing);
+            villages.add(villageHousing);
         }
 
         public void addVillage(VillageHousing village) {
@@ -150,7 +179,12 @@ public class ExpansiveVillagesMod {
 
         @SubscribeEvent
         public static void onWorldTick(TickEvent.WorldTickEvent tickEvent) {
+            if(tickEvent.side.isClient() || tickEvent.phase == TickEvent.Phase.START) {
+                return;
+            }
+
             HOUSE_CREATOR_MANAGER.worldTick(tickEvent.world);
+            LOGGER.info("Tick!");
         }
 
         @SubscribeEvent
